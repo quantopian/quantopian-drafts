@@ -269,9 +269,9 @@ def handle_data(context, data):
 
 
 
-### Daily History and Back Test Start
+### History and Back Test Start
 
-Unlike batch transforms, daily history is available on the first day of the backtest, data availability permitting.
+Unlike batch transforms, history is available on the first day of the backtest, data availability permitting.
 
 Unlike batch transforms, the data history does not require the algorithm to run for the number
 of days the window before returning a value.
