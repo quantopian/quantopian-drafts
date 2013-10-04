@@ -21,56 +21,90 @@ The use of `mavg` and other transforms, e.g. `data[sid(24)].mavg(10)` also had s
 
 ## Bar Units
 
-So that the unit of measurement is explicit, looking back into history is always by
-a specified unit of time.
-For daily backtests, the function `data.history.days('7d', 'price')` will return seven days worth of daily bars.
-For minute backtests, the function `data.history.minutes('15m', 'price')` will return 15 minutes of minute bars.
-For minute backtests, `data.history.minutes('3d')` will give the minutes for three trading days.
+So that the unit of measurement is explicit, we have add the `period` field, which defines the how often the data is sampled.
+For daily backtests, the function `data.history(bar_count=7, period='1d', field='price')` will return seven days worth of daily bars.
+For minute backtests, the function `data.history(bar_count=15, period='1m', field='price')` will return 15 minutes of minute bars.
 
-### Specifying Window Length
+## Data Shape
+
+Each data point data returned by the history API will have the following values:
+
+- `dt`, the timestamp of the last bar in the sample
+- `open`, the open of the first bar in the sample
+- `high`, the max of the highs in the sample
+- `low`, the min of the lows in the sample
+- `close`, the close of the last bar in the sample
+- `volume`, the total volume of the bars in the sample
+
+One way to conceptualize this is that the data returned by history returns "boxes" of the underlying data.
+
+### Specifying Period
 
 The parameters above, i.e. "7d", "15m", and "3d" specify the length of the window returned.
 
 - days
     - "d"
         - "1d", returns the current bar.
-        - "2d", returns the current and previous bar.
-        - "3d", returns the current bar and the two previous
+        - "2d", returns a sampling of the current and previous bar.
+        - "3d", returns a sampling of the current bar and the two previous
         - and so on
 
 - minutes
     - "m"
     The 'm' suffix returns an absolute number of minute bars.
         - "1m", returns the current minute
-        - "2m", returns the current minute plus the previous minuet
-        - "391m", returns all the minutes in the current day, plus the difference between how many minutes
+        - "2m", returns the a sampling of the current minute plus the previous minute
+        - "391m", returns a sampling of all the minutes in the current day, plus the difference between how many minutes
           have occurred so far in the current and the minutes in the previous day. In the case of a half-day,
           the 391 minute window would extend over three calendar days.
     - "d"
     Often when dealing with minute data, it is useful to specify the window length in days. The day window
     always starts at the beginning of a trading day, it is not a rolling start within the day.
-        - "1d", returns the minutes so far in the current day.
-        - "2d", returns the minutes so far in the current day, plus all the minutes from the previous day.
+        - "1d", returns a sampling of the minutes so far in the current day.
+        - "2d", returns a sampling the minutes so far in the current day, plus all the minutes from the previous day.
         - and so on...
 
-Note with "d" in minute mode, a half day counts as a total day, so the total number of minutes returned
+- days and minutes
+    - "W"
+    The 'W' suffix returns weeks.
+        - "1W", The -1 indexed week will be the current week of the algorithm time, up until the current bar.
+        All other weeks will have the open as the open of the first business day in the week, and the
+        close as the close of the last available business day of the week.
+    - "M"
+    The 'M' suffix returns months.
+        - "1M", The -1 indexed month will be the current month of algorithm time, up until the current bar.
+        All other months will have the open as the open of the first business day of the monht, and the
+        close as the close of the last available business day of the month.
+        
+
+Note with "d" in minute mode, a half day counts as a total day, so the total number of minutes sampled
 when specifying the window using days can change depending on holidays.
 
-To further cement the relationship of using "d" with `minutes` and using "d" with `days`.
-The following statement should be true.
+To further cement the relationship of using "d" in minute mode and using "d" in daily mode.
+On the last trading minute of each day, the statement of `date.history(bar_count=1, period='1d', 'price')` should
+be the same for both.
 
-(Where `resample("1D")` is a pandas function that takes the last price value for a day.)
+### Constraints
 
-```
-data.history.minutes('3d', 'price').resample("1D") == `data.history.days('3d', 'price')
-```
+Period of one day and above (i.e., '1d', '2d', '1W','1M', etc.) have a limit of being with in the date
+range of the backtest.
+e.g. if the algo range was from 2011-01-01 to 2011-12-01, the limit for a period of '1D' would be 252,
+the limit for a period of '2D' would be 176, for '1M' would be 12, etc.
+
+In minute mode, so that an algorithm does not consume too much memory,
+minute mode is limited to 2000 minutes.
+The minutes are counted by the product of the period and the count.
+i.e. both `data.history(bar_count=2000, period='1m', 'price')` and `data.history(bar_count=1000, period='2m', 'price')`
+are at the max.
+
+As we improve memory capabilities, the minute limit may change.
 
 #### More on Daily History in Minute-Bar Backtests
 
 In minute-bar backtests, we provide an easier way to access daily pricing information.
 
 To retrieve the daily data, when in minute mode, use the unit suffix `d`, when specifying the window length.
-e.g., ``data.history.days('2d', 'price')`
+e.g., ``data.history(bar_count=2, period='1d', 'price')`
 
 The daily history in relation to the minute bars, for each day, is:
 
@@ -80,7 +114,7 @@ The daily history in relation to the minute bars, for each day, is:
 - high, is the max of the minute `high`s
 - low, is the min of the minute bar `low`s
 
-For a window of `data.history.days` specified in days, e.g. `data.history.days('2d', 'price')`, the returned data also includes today's values up to the current minute, labeled with the date.
+For a window of `data.history` specified in days, e.g. `data.history(bar_count=2, period='1d', 'price')`, the returned data also includes today's values up to the current minute, labeled with the date.
 
 
 If the data source looks like:
@@ -98,7 +132,7 @@ The following example code:
 
 ```
 def handle_data(context, data):
-    log.info(data.history.days('2d'))
+    log.info(data.history(bar_count=2, frequncy='1d', 'price'))
 ```
 
 The output at 2013-09-06 14:31 UTC:
@@ -125,7 +159,7 @@ represented in UTC. Minutes will account for half trading days, and will fill to
 
 However, it can be useful to have visibility into whether a trade happened on a given day or minute.
 We will provide an option for the `data.history` methods, which will disable forward filling.
-e.g., `data.history.minute('1d', 'price', ffill=False)`
+e.g., `data.history(bar_count=15, period='1d', 'price', ffill=False)`
 In that case, the missing day or minute data will have a `nan` value for price, open, volume, etc.
 
 ## Specifying Field and Return Type
@@ -136,7 +170,7 @@ specified in the second parameter.
 e.g.
 
 ```
-data.history.days('1d', 'price')
+data.history(bar_count=2, period='1d', 'price')
 ```
 
 The above returns a DataFrame populated with the price information for each stock in the universe.
@@ -161,7 +195,7 @@ bar to the current bar.
 
 ```
 def handle_data(context, data):
-    price_history = data.history.minutes("2m", 'price')
+    price_history = data.history(bar_count=2, period='1m', 'price')
     for s in data:
         prev_bar = price_history[s][-2]
         curr_bar = price_history[s][-1]
@@ -179,7 +213,7 @@ The following example operates over all stocks available in `data`, in pandas Se
 
 ```
 def handle_data(context, data):
-    prices = data.history.days('15d', 'price')
+    prices = data.history(bar_count=15, period='1m', 'price')
     pct_change = (prices.ix[-1] - prices.ix[0]) / prices.ix[0]
     log.info(pct_change)
 ```
@@ -200,7 +234,7 @@ The percent change example can be re-written as:
 
 ```
 def handle_data(context, data):
-    price_history = data.history.days("15d", 'price')
+    price_history = data.history(bar_count=15, "1d", 'price')
     pct_change = price_history.iloc[[0, -1]].pct_change()
     log.info(pct_change)
 ```
@@ -209,7 +243,7 @@ The difference code example in the Current and Previous Bar section can also be 
 
 ```
 def handle_data(context, data):
-    price_history = data.history.days("15d", 'price')
+    price_history = data.history(bar_count=15, period="1d", field='price')
     diff = price_history.iloc[[0, -1]].diff()
     log.info(diff)
 ```
@@ -263,7 +297,7 @@ def initialize(context):
     context.sid2 = sid(123)
 
 def handle_data(context, data):
-    price_history = data.history.days('30d', 'price')
+    price_history = data.history(bar_count=30, period='1d', 'price')
     slope, intercept = ols_transform(price_history, context.sid1, context.sid2)
 ```
 
@@ -297,7 +331,7 @@ def initialize(context):
     set_universe(DollarVolumeUniverse(95, 95.1))
 
 def handle_data(context, data):
-    price_history = data.history.days('30d', 'price')
+    price_history = data.history(bar_count=30, period='1d', field='price')
     macd_result = talib.MACD(price_history)
 ```
 
@@ -311,14 +345,14 @@ The history's data structure is a pandas DataFrame with the shape of:
 
 ### Multiple Time Frequencies
 
-It should now be easier to do multifactor time ranges and frequencies as signal inputs.
+It should now be easier to use multifactor time ranges and frequencies as signal inputs.
 
 ```
 # An algorithm that uses the moving average both over days and minutes
 
 def handle_data(context, data):
-    daily_prices = data.history.days('30d', 'price')
-    minute_prices = data.history.minutes('15m', 'price')
+    daily_prices = data.history(bar_count=30, period='1d', field='price')
+    minute_prices = data.history(bar_count=15, period='1m', field='price')
     for s in data:
         if daily_prices[s].mean() < minute_prices[s].mean():
             order(s, 50)
@@ -336,7 +370,7 @@ The rolling transforms of mavg, stddev, etc. will now be replaced by their panda
 
 ```
 def handle_data(context, data):
-    price_history = data.history.days('5d', 'price')
+    price_history = data.history(bar_count=5, period='1d', 'price')
     log.info(price_history.std())
 ```
 
@@ -344,7 +378,7 @@ def handle_data(context, data):
 
 ```
 def handle_data(context, data):
-    price_history = data.history.days('5d', 'price')
+    price_history = data.history(bar_count=5, period='1d', 'price')
     log.info(price_history.mean())
 ```
 
@@ -357,11 +391,11 @@ def vwap(prices, volumes):
     return (prices * volumes).sum() / volumes.sum()
 
 def handle_data(context, data):
-    prices_a = data.history.minutes('15m', 'price')
-    volumes_a = data.history.minutes('15m', 'volume')
+    prices_a = data.history(15, '1m, 'price')
+    volumes_a = data.history(15, '1m', 'volume')
 
-    prices_b = data.history.minutes('30m', 'price')
-    volumes_b = data.history.minutes('30m', 'volume')
+    prices_b = data.history(30, '1m', 'price')
+    volumes_b = data.history(30, '1m', 'volume')
 
     vwap_a = vwap(prices_a, volumes_a)
     vwap_b = vwap(prices_b, volumes_b)
@@ -382,8 +416,8 @@ of the transform in one step.
 e.g.
 
 ```
-vwap_a = data.transforms.minutes.vwap('15m')
-vwap_b = data.transforms.minutes.vwap('30m')
+vwap_a = data.transforms.vwap(bar_count=15, period='1m')
+vwap_b = data.transforms.vwap(bar_count=15, period='30m')
 
 for s in data:
     if vwap_a[s] > vwap_b[s]:
@@ -395,7 +429,7 @@ The older style will be considered deprecated and unsupported.
 
 ### Resampling
 
-Through history we will provide data at minute and daily frequency, however
+Through history we will provide data at minute and daily period, however
 there are use cases for using data at other frequencies.
 
 To start, `data.history` will not provide those frequencies, but the DataFrames returned
@@ -410,7 +444,7 @@ chunks.
 
 ```
 def handle_data(context, data):
-    prices = data.history.minutes('300m', 'price')
+    prices = data.history(300, '1m', 'price')
     weekly_prices = prices.resample('H', how='last')
 ```
 
@@ -418,7 +452,7 @@ def handle_data(context, data):
 
 ```
 def handle_data(context, data):
-    prices = data.history.minutes('300m', 'volume')
+    prices = data.history.minutes(300, '1m', 'volume')
     weekly_prices = prices.resample('H', how='sum')
 ```
 
@@ -426,6 +460,21 @@ def handle_data(context, data):
 
 ```
 def handle_data(context, data):
-    prices = data.history.minutes('300m', 'open')
+    prices = data.history(300, '1m', 'open')
     weekly_prices = prices.resample('H', how='first')
+```
+
+### Extract Minutes For Day
+
+If the current days of minutes is desired, pandas built-in indexing can be used
+to extract those values.
+This example uses 390 minutes, which is a normal trading day's worth of minutes,
+but the indexing allows the algorithm to use just today's minutes, even on half day's.
+
+```
+def handle_data(context, data)
+    prices = data.history(bar_count=390, period='1m', 'open')
+    todays_prices = prices.ix[get_datelabel()]
+
+    log.info(today_prices)
 ```
