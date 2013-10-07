@@ -42,7 +42,7 @@ One way to conceptualize this is that the data returned by history returns "boxe
 
 The frequency parameters above, i.e. "7d", "15m", and "3d", specify how often the data is sampled.
 The bar_count specifies the number of samples to include in the dataframe returned by the history function.
-Below are code for common scenarios, along with explanations of the data returned.
+Below are code for example scenarios, along with explanations of the data returned.
 
 - Monthly Units
     - "M" suffix to the frequency parameter.
@@ -104,14 +104,11 @@ identical values for both minutely and daily simulations.
 
 ### Constraints
 
-Frequency of one day and above (i.e., '1d', '2d', '1W','1M', etc.) have a limit of being with in the date
-range of the backtest.
-e.g. if the algo range was from 2011-01-01 to 2011-12-01, the limit for a frequency of '1D' would be 252,
-the limit for a frequency of '2D' would be 176, for '1M' would be 12, etc.
+Frequency of one day and above (i.e., '1d', '2d', '1W','1M', etc.) have a limit of being within the date range of the backtest.
+e.g. if the simulation date range was from 2011-01-01 to 2011-12-31, the limit for bar_count at a frequency of '1D' would be 252, the limit for a frequency of '2D' would be 176, for '1M' would be 12, etc.
 
-In minute mode, so that an algorithm does not consume too much memory,
-minute mode is limited to 2000 minutes.
-The minutes are counted by the product of the frequency and the count.
+In minute simulations, the number of data points in a history is limited to 2000, so that an algorithm does not consume too much memory.
+The data points are counted by taking the product of the frequency and the count.
 i.e. both `data.history(bar_count=2000, frequency='1m', field='price')` and `data.history(bar_count=1000, frequency='2m', field='price')`
 are at the max.
 
@@ -176,9 +173,9 @@ For minutes, the index will be those trading days from 9:31 AM to 4:00 PM in New
 represented in UTC. Minutes will account for half trading days, and will fill to 9:31 AM to 1:00 PM on those days.
 
 However, it can be useful to have visibility into whether a trade happened on a given day or minute.
-We will provide an option for the `data.history` methods, which will disable forward filling.
+We provide an option for the `data.history` methods, which disables forward filling.
 e.g., `data.history(bar_count=15, frequency='1d', field='price', ffill=False)`
-In that case, the missing day or minute data will have a `nan` value for price, open, volume, etc.
+Will return a dataframe that has `nan` value for price for days on which a given sid did not trade.
 
 ## Specifying Field and Return Type
 
@@ -323,12 +320,11 @@ def handle_data(context, data):
 
 ### History and Back Test Start
 
-Unlike batch transforms, history is available on the first day of the backtest, data availability permitting.
+The data available to history is only limited by our historical database. The full history is available on the first day of the backtest.
 
-Unlike batch transforms, the data history does not require the algorithm to run for the number
-of days the window before returning a value.
+Data history does not require the algorithm to run for bar_count bars to fill the trailing window before returning a value.
 
-The data is backfilled so that calculations can be done more immediately.
+The data is backfilled so that calculations can be done immediately.
 
 ### TALib Port
 
@@ -363,7 +359,7 @@ The history's data structure is a pandas DataFrame with the shape of:
 
 ### Multiple Time Frequencies
 
-It should now be easier to use multifactor time ranges and frequencies as signal inputs.
+It is now easy to use multiple time ranges and frequencies as signal inputs.
 
 ```
 # An algorithm that uses the moving average both over days and minutes
