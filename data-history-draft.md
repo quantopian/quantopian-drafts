@@ -38,51 +38,69 @@ Each data point data returned by the history API will have the following values:
 
 One way to conceptualize this is that the data returned by history returns "boxes" of the underlying data.
 
-### Specifying Frequency
+### Specifying bar_count and frequency
 
-The parameters above, i.e. "7d", "15m", and "3d" specify the length of the window returned.
+The frequency parameters above, i.e. "7d", "15m", and "3d", specify how often the data is sampled.
+The bar_count specifies the number of samples to include in the dataframe returned by the history function.
+Below are code for common scenarios, along with explanations of the data returned.
 
-- days
-    - "d"
-        - "1d", returns the current bar.
-        - "2d", returns a sampling of the current and previous bar.
-        - "3d", returns a sampling of the current bar and the two previous
-        - and so on
+- Monthly Units
+    - "M" suffix to the frequency parameter.
+        - Months are always calendar months.
+        - data.history(1, "1M", "price") will return a dataframe with 1 row corresponding to the current calendar
+          month of algorithm time, up until the current bar.
+        - The current monthly bar will have:
+             - open as the open of the first business day of the month
+             - close as the close of the most recent data bar delivered to the algorithm
+        - All other months will have the open as the open of the first business day of the month, and the
+          close as the close of the last business day of the month.
 
-- minutes
-    - "m"
-    The 'm' suffix returns an absolute number of minute bars.
-        - "1m", returns the current minute
-        - "2m", returns the a sampling of the current minute plus the previous minute
-        - "391m", returns a sampling of all the minutes in the current day, plus the difference between how many minutes
-          have occurred so far in the current and the minutes in the previous day. In the case of a half-day,
-          the 391 minute window would extend over three calendar days.
-    - "d"
-    Often when dealing with minute data, it is useful to specify the window length in days. The day window
-    always starts at the beginning of a trading day, it is not a rolling start within the day.
-        - "1d", returns a sampling of the minutes so far in the current day.
-        - "2d", returns a sampling the minutes so far in the current day, plus all the minutes from the previous day.
-        - and so on...
+- Weekly Units
+    - "W" suffix to the frequency parameter.
+        - Weeks are always trading weeks, running Monday-Friday. For weeks where one or more days is a holiday,
+          the weekly bar for that week is included as a complete week.
+        - data.history(1, "1W", "price") returns the current week of the simulation, up until the current bar,
+          even if the week is partial (i.e. current day is Wednesday, you'll receive one bar comprised of data from
+          Monday through Wednesday).
+        - The current week bar will have:
+              - open as the open of the first business day of the week
+              - close as the close of the most recent data bar delivered to the algorithm
+        - All prior weeks will have the open as the open of the first business day in the week, and the
+          close as the close of the last business day of the week.
 
-- days and minutes
-    - "W"
-    The 'W' suffix returns weeks.
-        - "1W", The -1 indexed week will be the current week of the algorithm time, up until the current bar.
-        All other weeks will have the open as the open of the first business day in the week, and the
-        close as the close of the last available business day of the week.
-    - "M"
-    The 'M' suffix returns months.
-        - "1M", The -1 indexed month will be the current month of algorithm time, up until the current bar.
-        All other months will have the open as the open of the first business day of the monht, and the
-        close as the close of the last available business day of the month.
-        
+- Day Units
+    - "d" suffix to the frequency parameter
+    - returns are always in daily bars and bars never span more than one trading day
+    - examples:
+        - data.history(1, "1d", "price") returns the data since the current day's open as a bar, even if it is partial.
+        - data.history(2, "1d", "price") returns the previos day as a bar, as well as data since the open for the current day.
+        - data.history(3, "1d", "price") returns the previos two days as bars, as well as data since the open for the current day.
+    - frequency specified in days will treat any trading day as a single day unit. Scheduled half day sessions,
+      early closures for emergencies such as Hurrican Sandy, and other truncated sessions are all treated as a 
+      single trading day.
 
-Note with "d" in minute mode, a half day counts as a total day, so the total number of minutes sampled
-when specifying the window using days can change depending on holidays.
+- Minute Units
+    - returns are always in minutes. *Beware* that the returning dataframe may span more than one trading day.
+    - specifying a frequency in minutes for a daily simulation will raise and exception.
+    - "m" suffix to the frequency parameter
+        - data.history(1, "1m", "price") returns a dataframe with one rwo corresponding to the current minute
+        - data.history(2, "1m", "price") returns a dataframe with two rows, corresponding to the current minute 
+          plus the previous minute
+        - data.history(391, "1m", "price") returns a dataframe with 391 rows corresponding to the current minute plus
+          the previous 390.
+              - The purpose of this example is to illustrate that minute frequency history requests can span multiple
+                trading days.
+              - A full trading day is comprised of just 390 minutes, so the dataframe will always include all the
+                minutes in the current day. In the Nth minute of the day, the dataframe will have N minutes from today
+                plus 391-N minutes from the prior day. In the case of a half day, there are just 195 minutes of
+                trading. If the prior day were a half day, at the open the dataframe returned would have the first bar
+                from today, 195 bars for the half day, and 195 bars from two days prior.
 
-To further cement the relationship of using "d" in minute mode and using "d" in daily mode.
-On the last trading minute of each day, the statement of `date.history(bar_count=1, frequency='1d', field='price')` should
-be the same for both.
+For day, week, and month units, the values of the most recent bar in the history will differ when used in daily
+simulation versus minutely simulation. The reason for the difference is that in minute simulation (as well as paper
+trading and live trading) the current day can be partial.
+Only at the last trading minute of each day will `date.history(bar_count=1, frequency='1d', field='price')` return
+identical values for both minutely and daily simulations.
 
 ### Constraints
 
