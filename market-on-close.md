@@ -19,3 +19,9 @@ is_market_close(5)
 ```
 
 The above snippet would return True at 3:55PM, BUT will also return `True` for every minute after 3:55PM. This is to account for missing bars in data (e.g. if data doesn't exist for the minute bar at 3:55PM, the order will execute at 3:56PM instead). That being said, an order function that uses a smart target (e.g. reweighting for a target X weight of security Y) is recommended if passing in an `minutes_early` integer, otherwise, your order function will execute at 3:55PM, 3:56 PM, 3:57PM and etc. 
+
+So the following order function would order SPY 500 time instead of just 100
+```
+if(is_market_close(5)):
+	order(100, sid)
+```
